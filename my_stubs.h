@@ -19,9 +19,9 @@ extern "C" {
 typedef struct mydir {               // This is my version of DIR
   ino_t fh;
   int index;                          // should initially be zero
-} MY_DIR;  
+} MY_DIR;
 
- 
+
 // called at line #95 of bbfs.c
 int my_lstat( const char* path, struct stat *statbuf );
 
@@ -62,7 +62,7 @@ int my_truncate(const char *path, off_t newsize);
 int my_utime(const char *path, struct utimbuf *ubuf);
 
 // called at line #376 of bbfs.c.  Returns file handle not a file descriptor
-int my_open( const char *path, int flags ); 
+int my_open( const char *path, int flags );
 
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
 int my_pread( int fh, char *buf, size_t size, off_t offset );
@@ -127,13 +127,13 @@ int my_ftruncate( ino_t fh, off_t offset );
 int my_fstat( ino_t fh, struct stat* statbuf );
 
 // Helper
-void show_stat( struct stat& root );  
+void show_stat( struct stat& root );
 
 // Helper
-void initialize();                    
+void initialize();
 
 // Helper
-ino_t find_ino( string path );        
+//ino_t find_ino( string path );        
 
 
 #ifdef __cplusplus
