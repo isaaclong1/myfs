@@ -40,7 +40,7 @@ c#include <sys/xattr.h>
 
 // Here we include
 // C stuff
-#include "my_stubs.H"
+#include "my_stubs.h"
 #include </usr/include/linux/fs.h>  // needed for compilation on vagrant
 #include <sys/stat.h>  // this has our official definition of stat
 #include <dirent.h>    // this has our official definition of dirent
@@ -278,11 +278,6 @@ int my_mkdir( const char *path, mode_t mode ) {
   return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
-// called at line #203 of bbfs.cg
-int my_unlink( const char *path ) {
-  return an_err;
-}
-
 // called at line #220 of bbfs.c
 int my_rmdir( const char *path ) {
   // See http://linux.die.net/man/2/rmdir for a full list of all 13
@@ -332,29 +327,135 @@ int my_rename( const char *path, const char *newpath ) {
   return an_err;
 }
 
-// called at line #279 of bbfs.c
-int my_link(const char *path, const char *newpath) {
-  vector<string> v = split(string(newpath),"/");
-  string tail = v.back();
-  string dirpath = join(v, "/");
-  ino_t fh = find_ino(path);
-  if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-    errno = EPERM;
-    return an_err;
-  }
-  ino_t fh2 = find_ino(newpath);
-  if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
-    errno = EPERM;
-    return an_err;
-  }
-  ++ ilist.entry[fh].metadata.st_nlink;
-  // check for overflow.
-  dirent d;
-  d.d_ino = fh;
-  strcpy( d.d_name, tail.c_str() );
-  return ok;
+int my_link(const char *path, const char *newpath)
+{
+	// Extract Hard Link Name and Target Directory
+	vector<string> v = split(string(newpath),"/");
+  	string tail = v.back();
+	string target_dir;
+	if (v.size() < 2)
+	target_dir = ".";
+	else
+	target_dir = v.at(v.size() - 2);
+
+	// Find inode of the file in path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_link: File Not Found" << endl;
+    		return an_err;
+  	}
+  	else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+	{
+    		errno = EPERM;
+		cout << "Error my_link: First argument is a directory" << endl;
+    		return an_err;
+  	}
+	// Find inode of the directory in newpath
+  	ino_t fh2 = find_ino(target_dir);
+  	if (fh2 == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_link: Target Directory Not Found" << endl;
+    		return an_err;
+  	}
+	// Check to see if Hard Link already exists within Target Directory
+	vector<dirent_frame> target_directory = ilist.entry[fh2].dentries;
+	for (int i = 0; i < target_directory.size(); i++)
+	{
+		if (target_directory.at(i).the_dirent.d_ino == fh)
+		{
+			if (target_directory.at(i).the_dirent.d_name == tail.c_str())
+			{
+				// Hard Link exists
+				errno = EPERM;
+				cout << "Error my_link: Hard Link already exists" << endl;
+		    		return an_err;
+			}
+		}
+	}
+	// Create a new Hard Link
+	++ ilist.entry[fh].metadata.st_nlink;
+	dirent_frame new_link;
+	new_link.the_dirent.d_ino = fh;
+	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
+	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
+	// Push Hard Link into Target Directory
+	ilist.entry[fh2].dentries.push_back(new_link);
+	return ok;
 }
 
+int my_unlink( const char *path )
+{
+	// Extract Hard Link Name and Target Directory
+	vector<string> v = split(string(path),"/");
+  	string tail = v.back();
+	string target_dir;
+	if (v.size() < 2)
+	target_dir = ".";
+	else
+	target_dir = v.at(v.size() - 2);
+
+	// Find inode of the file in path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_unlink: File Not Found" << endl;
+    		return an_err;
+  	}
+  	else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+	{
+    		errno = EPERM;
+		cout << "Error my_unlink: First argument is a directory" << endl;
+    		return an_err;
+  	}
+	// Find inode of Target Directory in path
+	ino_t fh2 = find_ino(target_dir);
+	if (ilist.entry[fh].metadata.st_nlink > 1)
+	{
+		// Check to see where the Hard Link exists in Target Directory
+		vector <dirent_frame> Target_Directory = ilist.entry[fh2].dentries;
+		int position = -1;
+		for (int i = 0; i < Target_Directory.size(); i++)
+		{
+			if (Target_Directory.at(i).the_dirent.d_ino == fh){
+			if (Target_Directory.at(i).the_dirent.d_name == tail.c_str()){
+			if (Target_Directory.at(i).the_dirent.d_type != 'H')
+			{
+				// Found the original file, but Hard Links to it need to be deleted first
+		    		errno = EPERM;
+				cout << "Error my_unlink: Cannot unlink the original file if there exists Hard Links to it" << endl;
+		    		return an_err;
+		  	}
+			else
+			position = i;}}
+		}
+		if (position == -1)
+		{
+			// Hard Link was not found
+	    		errno = EPERM;
+			cout << "Error my_unlink: Hard Link not found" << endl;
+	    		return an_err;
+	  	}
+		// At this point, a Hard Link was found at "position"
+		std::vector<dirent_frame>::iterator it = Target_Directory.begin();
+		ilist.entry[fh].dentries.erase(it + position);
+		ilist.entry[fh].metadata.st_nlink--;
+	}
+	else
+	{
+		// If we unlink the original file, then we delete the file from the ilist
+		ilist.entry[fh].metadata.st_nlink--;
+		std::map<ino_t, File>::iterator it;
+		it = ilist.entry.find(fh);
+		if (it != ilist.entry.end())
+		ilist.entry.erase(it);
+	}
+	return ok;
+}
+ 
 // called at line #296 of bbfs.c
 int my_chmod(const char *path, mode_t mode) {
   return an_err;
