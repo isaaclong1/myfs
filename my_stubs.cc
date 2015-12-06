@@ -1,5 +1,5 @@
 
-// Note: this code is a work-in-progress.  This version: 2:00PM PST 11/14/15
+// Note: this code is a work-in-progress.  This version: 10:35 PM 12/05/2015
 
 // I intend that the prototypes and behaviors of these functions be
 // identical to those of their glibc counterparts, with three minor
@@ -205,6 +205,8 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
   // Now we create and configure this File's metadata (inode/struct).
   int the_ino = ilist.next();     // Get and record this directory's ino
   struct stat& md = ilist.entry[the_ino].metadata;   // Create this file
+  // Looks like an entry in the map is already created with "the_ino"
+  // Thus giving us a new file
   mode_t old_umask = umask(0);  // sets umask to 0 and returns old value
   umask(old_umask);                       // restores umask to old value
   md.st_dev     = dev;                /* ID of device containing file */
@@ -336,8 +338,10 @@ int my_link(const char *path, const char *newpath)
 	if (v.size() < 2)
 	target_dir = ".";
 	else
-	target_dir = v.at(v.size() - 2);
-
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
 	// Find inode of the file in path
   	ino_t fh = find_ino(path);
 	if (fh == 0)
@@ -366,7 +370,8 @@ int my_link(const char *path, const char *newpath)
 	{
 		if (target_directory.at(i).the_dirent.d_ino == fh)
 		{
-			if (target_directory.at(i).the_dirent.d_name == tail.c_str())
+			string temp = target_directory.at(i).the_dirent.d_name;
+			if (temp == tail)
 			{
 				// Hard Link exists
 				errno = EPERM;
@@ -395,7 +400,10 @@ int my_unlink( const char *path )
 	if (v.size() < 2)
 	target_dir = ".";
 	else
-	target_dir = v.at(v.size() - 2);
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
 
 	// Find inode of the file in path
   	ino_t fh = find_ino(path);
@@ -420,8 +428,9 @@ int my_unlink( const char *path )
 		int position = -1;
 		for (int i = 0; i < Target_Directory.size(); i++)
 		{
+			string temp = Target_Directory.at(i).the_dirent.d_name;
 			if (Target_Directory.at(i).the_dirent.d_ino == fh){
-			if (Target_Directory.at(i).the_dirent.d_name == tail.c_str()){
+			if (temp == tail){
 			if (Target_Directory.at(i).the_dirent.d_type != 'H')
 			{
 				// Found the original file, but Hard Links to it need to be deleted first
@@ -440,9 +449,10 @@ int my_unlink( const char *path )
 	    		return an_err;
 	  	}
 		// At this point, a Hard Link was found at "position"
-		std::vector<dirent_frame>::iterator it = Target_Directory.begin();
-		ilist.entry[fh].dentries.erase(it + position);
 		ilist.entry[fh].metadata.st_nlink--;
+		Target_Directory.erase(Target_Directory.begin() + position);
+		ilist.entry[fh2].dentries = Target_Directory;
+
 	}
 	else
 	{
@@ -1132,9 +1142,15 @@ int main(int argc, char* argv[] ) {
   initialize();
   stringstream record;
   ifstream myin;
+		// Initiallizing my own files and directories. This is part of the menu.
+		my_mkdir("/Dir1", S_IFDIR);
+		my_mknod("/Dir1/Sample_File", S_IFREG, 100);
+		my_mkdir("/Dir1/Dir2", S_IFDIR);
+		cout << "A Sample File System has been created. Directories include /, /Dir1, and /Dir1/Dir2.\n";
+		cout << "A sample file has been created and is located at /Dir1/Sample_File.\n"; 
   if ( argc ) myin.open( argv[1] );
   for(;;) { // Idiom for infinite loop
-    string op, file;
+    string op, file, source, destination;
     // if ( myin.eof() ) exit(0);
     cout << "Which op and file? " << endl;
     (myin.good() ? myin : cin) >> op >> file;
@@ -1159,7 +1175,45 @@ int main(int argc, char* argv[] ) {
       struct stat a_stat;
       my_lstat(file.c_str(), &a_stat);
       show_stat(a_stat);
-    } else if (op == "exit"  ) { // quits
+    }				// Use S_IFREG in the st_mode field to create a regular file
+				// Use S_ISREG to check to see if it is a regular file
+	else if (op == "View")
+	{
+		cout << "Ilist size: " << ilist.entry.size() << endl;
+		cout << "Number of Files: " << ilist.entry[2].dentries.size() << endl;
+		for (int i = 0; i < ilist.entry[2].dentries.size(); i++)
+		cout << i << ": " << ilist.entry[2].dentries[i].the_dirent.d_name << endl;
+		// my_mknod( const char *path, S_IFREG, 100 ) Creates a file
+	}
+	else if (op == "Link")
+	{
+		cout << "Please indicate source followed by destination: ";
+		cin >> source >> destination;
+		cout << "Generating Results...\n";
+		int Result = my_link(source.c_str(), destination.c_str());
+		if (Result == ok)
+		{
+			vector<string> v = split(string(destination),"/");
+			v.pop_back();
+			destination = join(v, "/");
+			cout << "Hard Link creation successful! Viewing results in " << destination << ":" << endl;
+			ls(destination);
+		}
+	}
+	else if (op == "Unlink")
+	{
+		cout << "Generating Results...\n";
+		int Result = my_unlink(file.c_str());
+		if (Result == ok)
+		{
+			vector<string> v = split(string(file),"/");
+			v.pop_back();
+			file = join(v, "/");
+			cout << "Hard Link deletion successful! Viewing results in " << file << ":" << endl;
+			ls(file);
+		}
+	}
+      else if (op == "exit"  ) { // quits
       // save dialog so far to specified file.
       ofstream myfile;
       myfile.open (file);
@@ -1173,7 +1227,7 @@ int main(int argc, char* argv[] ) {
     } else {
       cout << "Correct usage is: op pathname,\n";
       cout << "where \"op\" is one of the following:\n";
-      cout << "help, play, save, mkdir, show, break, lslr, exit.\n";
+      cout << "help, play, save, mkdir, show, break, lslr, exit, Link.\n";
       cout << "For example, type \"exit now\" to exit.\n";
     }
   }
