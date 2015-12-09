@@ -33,7 +33,7 @@ Todo for functions
 High priority — Finish by Wednesday Dec. 2 
 
 my_rename (move)	Ryan
-my_link             Allyn
+my_link                 Allyn
 my_unlink 		Allyn
 my_create 		Ben
 my_open			Andrew
