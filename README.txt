@@ -47,7 +47,7 @@ which ones you are doing if you do so)
 Medium priority
 
 my_access 
-my_rmdir
+my_rmdir    Allyn
 my_chown
 my_chmod    Allyn
 
