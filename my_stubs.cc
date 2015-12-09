@@ -49,7 +49,7 @@
 #include <map>
 #include <list>
 #include <iostream>
-#include "my_stubs.H"
+#include "my_stubs.h"
 #include <time.h>
 #include <pwd.h>
 #include <grp.h>
@@ -380,14 +380,16 @@ int my_open( const char *path, int flags ) {
   // corresponding directory entry, which has type struct dirent.
   // Return its d_fileno, unless there's an error and then return -1.
 
-  // FINISH THIS
-  // static filecount = 0;
-  // ino_t fh = find_ino(path);  // 
-  // if ( fh >= 0 && ) {
-  //   return fh;
-  // } else if ( flags & CREAT ) {
-  //   // create a new inode with ino_t filecount++;
-  // }
+  if (path == NULL) return -1;
+  
+  ino_t fh = find_ino(path);
+  if ( fh >= 0 ) {
+    FILE* file = find_file( fh );
+    file.metadata.st_atime = time(0);
+    return fh;
+  } else if ( flags & O_CREAT ) {
+    my_creat( path, flags ); // create a new inode with ino_t filecount++;
+  }
 
 }  
 
