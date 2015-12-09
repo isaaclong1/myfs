@@ -1,5 +1,5 @@
 
-// Note: this code is a work-in-progress.  This version: 10:35 PM 12/05/2015
+// Note: this code is a work-in-progress.  This version: 10:50 PM 12/08/2015
 
 // I intend that the prototypes and behaviors of these functions be
 // identical to those of their glibc counterparts, with three minor
@@ -292,7 +292,7 @@ int my_rmdir( const char *path ) {
     errno = ENOTDIR;
     return an_err;
   }
-  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
+  if ( the_dir.dentries.size() > 2 ) {
     cdbg << "not empty\n";
     errno = ENOTEMPTY;
     return an_err;
@@ -466,9 +466,29 @@ int my_unlink( const char *path )
 	return ok;
 }
  
-// called at line #296 of bbfs.c
-int my_chmod(const char *path, mode_t mode) {
-  return an_err;
+int my_chmod(const char *path, mode_t mode)
+{
+		// Find the inode of path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_chmod: File Not Found" << endl;
+    		return an_err;
+  	}	// If it is a directory
+	if (S_ISDIR(ilist.entry[fh].metadata.st_mode))
+	{
+		ilist.entry[fh].metadata.st_mode = mode;
+		ilist.entry[fh].metadata.st_mode |= S_IFDIR;
+	}
+	else	// If it is a file
+	{
+		ilist.entry[fh].metadata.st_mode = mode;
+		ilist.entry[fh].metadata.st_mode |= S_IFREG;
+
+	}	// change the inode structure modification time
+ 	ilist.entry[fh].metadata.st_ctime = time(0);		
+	return ok;
 }
 
 // called at line #314 of bbfs.c
@@ -1146,7 +1166,10 @@ int main(int argc, char* argv[] ) {
 		my_mkdir("/Dir1", S_IFDIR);
 		my_mknod("/Dir1/Sample_File", S_IFREG, 100);
 		my_mkdir("/Dir1/Dir2", S_IFDIR);
-		cout << "A Sample File System has been created. Directories include /, /Dir1, and /Dir1/Dir2.\n";
+		my_mkdir("/Dir1/Dir2/Dir3", S_IFDIR);
+		my_mkdir("/Dir1/Dir2/Dir3/Dir4", S_IFDIR);
+		cout << "A Sample File System has been created. Directories include /, /Dir1,\n";
+		cout << "/Dir1/Dir2, /Dir1/Dir2/Dir3, and /Dir1/Dir2/Dir3/Dir4.\n";
 		cout << "A sample file has been created and is located at /Dir1/Sample_File.\n"; 
   if ( argc ) myin.open( argv[1] );
   for(;;) { // Idiom for infinite loop
@@ -1213,6 +1236,56 @@ int main(int argc, char* argv[] ) {
 			ls(file);
 		}
 	}
+	else if (op == "Chmod")
+	{
+		cout << "Current File Statistics:\n";
+		show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
+		cout << "Please type a permission bit mask (Examples: 777, 4000, 6777, 776, 001):\n";
+		int mod = 0;
+		mode_t mod_1 = 0;
+		cin >> mod;
+						// This section of the code represents a "smart" int to bit mask
+		if ((mod - 4000) >= 0)		// converter. If mod does not = 0 at the end, then the user
+		{mod_1 += S_ISUID; mod -= 4000;}// entered an incorrect bitmask. I later found out that this is
+		if ((mod - 2000) >= 0)		// something called "Octal"
+		{mod_1 += S_ISGID; mod -= 2000;}
+		if ((mod - 1000) >= 0)
+		{mod_1 += S_ISVTX; mod -= 1000;}
+
+		if ((mod - 400) >= 0)
+		{mod_1 += S_IRUSR; mod -= 400;}
+		if ((mod - 200) >= 0)
+		{mod_1 += S_IWUSR; mod -= 200;}
+		if ((mod - 100) >= 0)
+		{mod_1 += S_IXUSR; mod -= 100;}
+
+		if ((mod - 40) >= 0)
+		{mod_1 += S_IRGRP; mod -= 40;}
+		if ((mod - 20) >= 0)
+		{mod_1 += S_IWGRP; mod -= 20;}
+		if ((mod - 10) >= 0)
+		{mod_1 += S_IXGRP; mod -= 10;}
+
+		if ((mod - 4) >= 0)
+		{mod_1 += S_IROTH; mod -= 4;}
+		if ((mod - 2) >= 0)
+		{mod_1 += S_IWOTH; mod -= 2;}
+		if ((mod - 1) >= 0)
+		{mod_1 += S_IXOTH; mod -= 1;}
+						// At this point, mod_1 holds the desired bit mask required for "mode"
+		if (mod == 0)
+		{
+			cout << "Generating Results on " << mod_1 << "...\n";
+			int Result = my_chmod(file.c_str(), mod_1);
+			if (Result == ok)
+			{
+				cout << "Chmod was successful! Viewing specified file:\n";
+				show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
+			}
+		}
+		else
+		cout << "Error my_chmod: User entered an invalid permission bit mask\n";
+	}
       else if (op == "exit"  ) { // quits
       // save dialog so far to specified file.
       ofstream myfile;
@@ -1227,7 +1300,7 @@ int main(int argc, char* argv[] ) {
     } else {
       cout << "Correct usage is: op pathname,\n";
       cout << "where \"op\" is one of the following:\n";
-      cout << "help, play, save, mkdir, show, break, lslr, exit, Link.\n";
+      cout << "help, play, save, mkdir, show, break, lslr, exit, Link, Unlink, Chmod.\n";
       cout << "For example, type \"exit now\" to exit.\n";
     }
   }
