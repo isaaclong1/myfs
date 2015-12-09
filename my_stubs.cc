@@ -389,7 +389,7 @@ int my_open( const char *path, int flags ) {
   // Return its d_fileno, unless there's an error and then return -1.
 
   if (path == NULL) return -1;
-  
+
   ino_t fh = find_ino(path);
   if ( fh >= 0 ) {
     File* file = find_file( fh );
@@ -424,7 +424,7 @@ void my_pread_test_harness() {
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
   if(ilist.entry.find(fh) == ilist.entry.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
 
-  // get the file to be read from
+  // get the file to be read from, this will change slightly with open file list
   File f = ilist.entry.at(fh);
   int dataSize = f.data.size();
   if(dataSize == 0) return an_err; // TODO: more descriptive error msg, e.g. file is empty, or file is a directory.
