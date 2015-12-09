@@ -40,7 +40,7 @@ c#include <sys/xattr.h>
 
 // Here we include
 // C stuff
-#include "my_stubs.H"
+#include "my_stubs.h"
 #include </usr/include/linux/fs.h>  // needed for compilation on vagrant
 #include <sys/stat.h>  // this has our official definition of stat
 #include <dirent.h>    // this has our official definition of dirent
@@ -49,6 +49,7 @@ c#include <sys/xattr.h>
 #include <grp.h>
 #include <time.h>
 #include <err.h>
+#include <errno.h>
 // C++ stuff
 #include <iostream>
 #include <fstream>
@@ -60,7 +61,6 @@ c#include <sys/xattr.h>
 #include <map>
 #include <list>
 #include <iostream>
-#include <errno.h>
 
 using namespace std;
 
@@ -95,6 +95,8 @@ public:
   // list<dirent_frame> dentries;        // it'd be cleaner to make this a list
 };
 
+//File forward declaration
+File* find_file( ino_t ino );
 
 class Ilist {
 public:
@@ -386,14 +388,16 @@ int my_open( const char *path, int flags ) {
   // corresponding directory entry, which has type struct dirent.
   // Return its d_fileno, unless there's an error and then return -1.
 
-  // FINISH THIS
-  // static filecount = 0;
-  // ino_t fh = find_ino(path);  //
-  // if ( fh >= 0 && ) {
-  //   return fh;
-  // } else if ( flags & CREAT ) {
-  //   // create a new inode with ino_t filecount++;
-  // }
+  if (path == NULL) return -1;
+  
+  ino_t fh = find_ino(path);
+  if ( fh >= 0 ) {
+    File* file = find_file( fh );
+    file->metadata.st_atime = time(0);
+    return fh;
+  } else if ( flags & O_CREAT ) {
+    my_creat( path, flags ); // create a new inode with ino_t filecount++;
+  }
 
 }
 

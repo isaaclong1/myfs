@@ -33,6 +33,7 @@ Todo for functions
 High priority — Finish by Wednesday Dec. 2 
 
 my_rename (move)	Ryan
+my_link                 Allyn
 my_unlink 		Allyn
 my_create 		Ben
 my_open			Andrew
@@ -46,9 +47,9 @@ which ones you are doing if you do so)
 Medium priority
 
 my_access 
-my_rmdir
+my_rmdir    Allyn
 my_chown
-my_chmod
+my_chmod    Allyn
 
 Low priority
 
