@@ -397,14 +397,90 @@ int my_open( const char *path, int flags ) {
 
 }
 
+// waiting on test harness for open to be complete
+void my_pread_test_harness() {
+  // simplest case: create a file and read from it; buf has enough room for entire file
+
+  // create a file and read from it; buf does not have enough room for full file
+
+  // create a file and read from it; use offset
+}
+
 // called at line #411 of bbfs.c  Note that our firt arg is an fh not an fd
+/*
+ * A few assumptions:
+ * -fh is supposed to point at a regular file, not a directory, and this function
+ * will error if it points to a directory
+ * -size is the size of buf
+ * -offset is the offset in the file to begin reading from
+ * Summary:
+ * -Find the file at fh and fill buf until size reached (or until reached end of data string)
+ * beginning at 'offset'th byte in data string
+*/
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-  return an_err;
+  if(ilist.entry.find(fh) == ilist.entry.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
+
+  // get the file to be read from
+  File f = ilist.entry.at(fh);
+  int dataSize = f.data.size();
+  if(dataSize == 0) return an_err; // TODO: more descriptive error msg, e.g. file is empty, or file is a directory.
+                                   // this is not necessarily an error, just return nothing or a diff error value
+  if(dataSize >= offset) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
+
+  // TODO: make sure they have read access permissions, and update to get and check
+  // file from Andrew's open file table implementation will have pertinent info
+
+  // While buf has not run out of space and we're not at the end of the file, copy
+  // data from data to buf
+  int iBuf = 0, iData = offset;
+  while(iBuf < size && iData < dataSize) {
+    buf[iBuf] = f.data[iData];
+    iBuf++;
+    iData++;
+  }
+
+  // TODO: have a statement that indicates whether you reached the end of the file or not?
+  return ok;
+}
+
+// waiting on open before write test harness
+void my_pwrite_test_harness() {
+  // simplest case: create a file and write to it
+
 }
 
 // called at line #439 of bbfs.c  Note that our firt arg is an fh not an fd
+/*
+ * Same general assumptions as pread
+ * -pwrite, if started in the middle of the file, will overwrite its contents,
+ * it will not insert
+ * Summary:
+ * -Find file at fh and copy the contents of buf to its data string, beginning at 'offset'
+ * in the data string
+*/
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-  return an_err;
+  if(ilist.entry.find(fh) == ilist.entry.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
+
+  // get the file to be read from
+  File f = ilist.entry.at(fh);
+  int dataSize = f.data.size();
+  if(offset >= dataSize) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
+  if(size <= 0) return an_err; // TODO: more descriptive error msg, e.g. nothing to write
+
+  // TODO: make sure they have write access permissions, and update to get and check
+  // file from Andrew's open file table implementation will have pertinent info
+
+  // While buf has not run out of space and we're not at the end of the file, copy
+  // data from buf to data
+  int iBuf = 0, iData = offset;
+  while(iBuf < size && iData < dataSize) {
+    f.data[iData] = buf[iBuf];
+    iBuf++;
+    iData++;
+  }
+
+  // TODO: have a statement that indicates whether you reached the end of the file or not?
+  return ok;
 }
 
 // called at line #463 of bbfs.c
