@@ -335,56 +335,91 @@ bool comp(char c[], string s)
 unsigned pos; // used to keep track of the dentries position of the last changed d_name for testing purposes in main()
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
-
-  /* I want the last word after the last "/" in path and new path, because that's the file name.
-     for ex, '/vagrant/asdf' where asdf is my filename*/
-  vector<string> v = split(string(newpath),"/");
-  string newname = v.back();
-  v.clear();
-  v = split(string(path),"/");
-  string currentname = v.back();
-
-  int k = 0;
-  for(unsigned i = 0; i < string(path).size(); i++)
+  vector<string> v = split(string(path),"/");
+  string tail = v.back();
+  string target_dir;
+  if (v.size() < 2)
+  target_dir = ".";
+  else
   {
-  	if(path[i] == '/')
-  		k = i;
+    v.pop_back();
+    target_dir = join(v, "/");
   }
 
-  string str_path = string(path).substr(0, k);
-  cout << "str path is : " << str_path << endl;
-
-  ino_t fh = find_ino(str_path);
-  if(fh == 0)
-  	  return an_err;
-
-  /*
-    last status and last modified time are updated to the
-    current time
-  */
-  time_t current_time;
-  ilist.entry[fh].metadata.st_ctime = time(&current_time);
-  ilist.entry[fh].metadata.st_mtime = time(&current_time);
-
-  cout << "asdf" <<ilist.entry[fh].dentries.size() << endl;
-
-  //@for: I traverse dentries vector of dirent_frames
-  for(unsigned i = 0; i < ilist.entry[fh].dentries.size(); i++)
+  // Find inode of the file in path
+    ino_t fh = find_ino(path);
+  if (fh == 0)
   {
-  	/*
-  	   d_name is type char[] d_name is the name of the entry; i'm assumming this is the file name
-  	   @if: I find The_dirent in dentries with the original file name in ilist.entry[fh]
-  	   @body_of_if: I replace the old d_name with the new one.
-  	*/
-  	if(strcmp(ilist.entry[fh].dentries[i].the_dirent.d_name, currentname.c_str() ) )
-  	{
-  		pos = i;
-  		strcpy(ilist.entry[fh].dentries[i].the_dirent.d_name, newname.c_str());
-  		//strcpy(newname.c_str(), ilist.entry[fh].dentries[i].the_dirent.d_name);
-  		break;
-  	}
+        errno = EPERM;
+    cout << "rename Error: File Not Found" << endl;
+        return an_err;
+    }
+    else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+  {
+        errno = EPERM;
+    cout << "rename Error:is a directory" << endl;
+        return an_err;
+    }
+  // Find inode of Target Directory in path
+  ino_t fh2 = find_ino(target_dir);
+  if (ilist.entry[fh].metadata.st_nlink > 1)
+  {
+    // Check to see where the Hard Link exists in Target Directory
+    vector <dirent_frame> Target_Directory = ilist.entry[fh2].dentries;
+    int position = -1;
+    for (int i = 0; i < Target_Directory.size(); i++)
+    {
+      string temp = Target_Directory.at(i).the_dirent.d_name;
+      if (Target_Directory.at(i).the_dirent.d_ino == fh){
+      if (temp == tail){
+      if (Target_Directory.at(i).the_dirent.d_type != 'H')
+      {
+        // Found the original file, but Hard Links to it need to be deleted first
+            errno = EPERM;
+        cout << "rename Error: Cannot unlink the original file if there exists Hard Links to it" << endl;
+            return an_err;
+        }
+      else
+      position = i;}}
+    }
+    if (position == -1)
+    {
+      // Hard Link was not found
+          errno = EPERM;
+      cout << "rename Error: Hard Link not found" << endl;
+          return an_err;
+      }
+    // At this point, a Hard Link was found at "position"
+    ilist.entry[fh].metadata.st_nlink--;
+    Target_Directory.erase(Target_Directory.begin() + position);
+    ilist.entry[fh2].dentries = Target_Directory;
   }
-  return ok;
+  else
+  {
+    // If we unlink the original file, then we delete the file from the ilist
+    ilist.entry[fh].metadata.st_nlink--;
+    std::map<ino_t, File>::iterator it;
+    it = ilist.entry.find(fh);
+    if (it != ilist.entry.end())
+    ilist.entry.erase(it);
+    vector <dirent_frame> Target_Directory = ilist.entry[fh2].dentries;
+    for (int i = 0; i < Target_Directory.size(); i++)
+    {
+      string temp = Target_Directory.at(i).the_dirent.d_name;
+      if (Target_Directory.at(i).the_dirent.d_ino == fh){
+      if (temp == tail){
+      if (Target_Directory.at(i).the_dirent.d_type != 'H')
+      {
+        Target_Directory.erase(Target_Directory.begin() + i);
+        ilist.entry[fh2].dentries = Target_Directory;
+        break;
+      }}}
+    }   
+  }
+
+  my_mknod(newpath, S_IFREG, 100 ); 
+  
+  return ok; 
 }
 
 // called at line #279 of bbfs.c
