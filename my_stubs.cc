@@ -279,42 +279,42 @@ int my_mkdir( const char *path, mode_t mode ) {
   return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
-// called at line #220 of bbfs.c
-int my_rmdir( const char *path ) {
-  // See http://linux.die.net/man/2/rmdir for a full list of all 13
-  // possible errors for rmdir.
-
-  ino_t fh = find_ino( path );
-  File the_dir = ilist.entry[fh];
-  if ( ! S_ISDIR(the_dir.metadata.st_mode) ) {
-    cdbg << "does not exist\n";
-    errno = ENOTDIR;
-    return an_err;
-  }
-  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
-    cdbg << "not empty\n";
-    errno = ENOTEMPTY;
-    return an_err;
-  }
-  vector<string> vs = split( path, "/" );
-  vs.pop_back();
-  string parent_path = join(vs,"/");
-  parent_path = "/" + parent_path;  // FIX this hack
-  // cdbg << "Parent path is " << parent_path << endl;
-  ino_t parent = find_ino(parent_path);
-  // cdbg << "Parent ino is " << parent << endl;
-  vector<dirent_frame>& v = ilist.entry[parent].dentries;
-  for(auto it = v.begin(); it != v.end(); ++it ) {
-    // We erase him from his parent directory.
-    if ( it->the_dirent.d_ino == fh ) {
-      // cdbg << "erasing " << fh << " from " << parent << endl;
-      v.erase(it);
-      break;  // Must stop iterating now!
-    }
-  }
-  if ( --the_dir.metadata.st_nlink == 0 ) {
-    ilist.entry.erase(fh);  // get rid of this file
-  }
+int my_rmdir(const char *path)
+{
+	ino_t fh = find_ino(path);
+	File the_dir = ilist.entry[fh];
+	if (!S_ISDIR(the_dir.metadata.st_mode))
+	{
+		cdbg << "does not exist\n";
+		errno = ENOTDIR;
+    		return an_err;
+  	}
+	if (!the_dir.dentries.size() > 2)
+	{
+		cdbg << "not empty\n";
+		errno = ENOTEMPTY;
+		return an_err;
+	}
+	vector<string> vs = split( path, "/" );
+	vs.pop_back();
+	string parent_path = join(vs,"/");
+	parent_path = "/" + parent_path;
+	// cdbg << "Parent path is " << parent_path << endl;
+	ino_t parent = find_ino(parent_path);
+	// cdbg << "Parent ino is " << parent << endl;
+	vector<dirent_frame> & v = ilist.entry[parent].dentries;
+	for(auto it = v.begin(); it != v.end(); ++it )
+	{
+		// We erase him from his parent directory.
+		if ( it->the_dirent.d_ino == fh )
+		{
+			// cdbg << "erasing " << fh << " from " << parent << endl;
+      			v.erase(it);
+      			break;  // Must stop iterating now!
+      		}
+  	}
+  	if (--the_dir.metadata.st_nlink == 0)
+	ilist.entry.erase(fh);
   return ok;
 }
 
