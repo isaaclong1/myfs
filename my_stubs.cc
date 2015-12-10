@@ -279,42 +279,39 @@ int my_mkdir( const char *path, mode_t mode ) {
   return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
-// called at line #220 of bbfs.c
-int my_rmdir( const char *path ) {
-  // See http://linux.die.net/man/2/rmdir for a full list of all 13
-  // possible errors for rmdir.
-
-  ino_t fh = find_ino( path );
-  File the_dir = ilist.entry[fh];
-  if ( ! S_ISDIR(the_dir.metadata.st_mode) ) {
-    cdbg << "does not exist\n";
-    errno = ENOTDIR;
-    return an_err;
-  }
-  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
-    cdbg << "not empty\n";
-    errno = ENOTEMPTY;
-    return an_err;
-  }
-  vector<string> vs = split( path, "/" );
-  vs.pop_back();
-  string parent_path = join(vs,"/");
-  parent_path = "/" + parent_path;  // FIX this hack
-  // cdbg << "Parent path is " << parent_path << endl;
-  ino_t parent = find_ino(parent_path);
-  // cdbg << "Parent ino is " << parent << endl;
-  vector<dirent_frame>& v = ilist.entry[parent].dentries;
-  for(auto it = v.begin(); it != v.end(); ++it ) {
-    // We erase him from his parent directory.
-    if ( it->the_dirent.d_ino == fh ) {
-      // cdbg << "erasing " << fh << " from " << parent << endl;
-      v.erase(it);
-      break;  // Must stop iterating now!
-    }
-  }
-  if ( --the_dir.metadata.st_nlink == 0 ) {
-    ilist.entry.erase(fh);  // get rid of this file
-  }
+int my_rmdir(const char *path)
+{
+	ino_t fh = find_ino(path);
+	File the_dir = ilist.entry[fh];
+	if (!S_ISDIR(the_dir.metadata.st_mode))
+	{
+		cdbg << "does not exist\n";
+		errno = ENOTDIR;
+    		return an_err;
+  	}
+	if (!the_dir.dentries.size() > 2)
+	{
+		cdbg << "not empty\n";
+		errno = ENOTEMPTY;
+		return an_err;
+	}
+	vector<string> vs = split( path, "/" );
+	vs.pop_back();
+	string parent_path = join(vs,"/");
+	parent_path = "/" + parent_path;
+	ino_t parent = find_ino(parent_path);
+	vector<dirent_frame> & v = ilist.entry[parent].dentries;
+	for(auto it = v.begin(); it != v.end(); ++it )
+	{
+		// We erase him from his parent directory.
+		if ( it->the_dirent.d_ino == fh )
+		{
+      			v.erase(it);
+      			break;  // Must stop iterating now!
+      		}
+  	}
+  	if (--the_dir.metadata.st_nlink == 0)
+	ilist.entry.erase(fh);
   return ok;
 }
 
@@ -391,16 +388,19 @@ int my_rename( const char *path, const char *newpath ) {
 }
 
 // called at line #279 of bbfs.c
-int my_link(const char *path, const char *newpath) {
-  // Extract Hard Link Name and Target Directory
+int my_link(const char *path, const char *newpath)
+{
+	// Extract Hard Link Name and Target Directory
 	vector<string> v = split(string(newpath),"/");
   	string tail = v.back();
 	string target_dir;
 	if (v.size() < 2)
 	target_dir = ".";
 	else
-	target_dir = v.at(v.size() - 2);
-
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
 	// Find inode of the file in path
   	ino_t fh = find_ino(path);
 	if (fh == 0)
@@ -429,7 +429,8 @@ int my_link(const char *path, const char *newpath) {
 	{
 		if (target_directory.at(i).the_dirent.d_ino == fh)
 		{
-			if (target_directory.at(i).the_dirent.d_name == tail.c_str())
+			string temp = target_directory.at(i).the_dirent.d_name;
+			if (temp == tail)
 			{
 				// Hard Link exists
 				errno = EPERM;
@@ -442,7 +443,7 @@ int my_link(const char *path, const char *newpath) {
 	++ ilist.entry[fh].metadata.st_nlink;
 	dirent_frame new_link;
 	new_link.the_dirent.d_ino = fh;
-	strcpy(new_link.the_dirent.d_name, tail.c_str());
+	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
 	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
 	// Push Hard Link into Target Directory
 	ilist.entry[fh2].dentries.push_back(new_link);
@@ -545,7 +546,7 @@ int my_chmod(const char *path, mode_t mode)
 		ilist.entry[fh].metadata.st_mode |= S_IFREG;
 
 	}	// change the inode structure modification time
- 	ilist.entry[fh].metadata.st_ctime = time(0);
+ 	ilist.entry[fh].metadata.st_ctime = time(0);		
 	return ok;
 }
 
