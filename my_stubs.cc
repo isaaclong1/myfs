@@ -1330,6 +1330,7 @@ int main(int argc, char* argv[] ) {
 	// Initiallizing my own files and directories. This is part of the menu.
 	my_mkdir("/Dir1", S_IFDIR);
 	my_mknod("/Dir1/Sample_File", S_IFREG, 100);
+  my_open("/Dir1/Sample_File", 0);
 	my_mkdir("/Dir1/Dir2", S_IFDIR);
 	my_mkdir("/Dir1/Dir2/Dir3", S_IFDIR);
 	my_mkdir("/Dir1/Dir2/Dir3/Dir4", S_IFDIR);
