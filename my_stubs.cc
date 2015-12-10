@@ -386,7 +386,7 @@ int my_link(const char *path, const char *newpath)
 	++ ilist.entry[fh].metadata.st_nlink;
 	dirent_frame new_link;
 	new_link.the_dirent.d_ino = fh;
-	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
+	strcpy(new_link.the_dirent.d_name, tail.c_str());
 	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
 	// Push Hard Link into Target Directory
 	ilist.entry[fh2].dentries.push_back(new_link);
@@ -467,7 +467,7 @@ int my_unlink( const char *path )
 	}
 	return ok;
 }
- 
+
 int my_chmod(const char *path, mode_t mode)
 {
 		// Find the inode of path
@@ -489,7 +489,7 @@ int my_chmod(const char *path, mode_t mode)
 		ilist.entry[fh].metadata.st_mode |= S_IFREG;
 
 	}	// change the inode structure modification time
- 	ilist.entry[fh].metadata.st_ctime = time(0);		
+ 	ilist.entry[fh].metadata.st_ctime = time(0);
 	return ok;
 }
 
@@ -558,17 +558,19 @@ void my_pread_test_harness() {
  * beginning at 'offset'th byte in data string
 */
 int my_pread( int fh, char *buf, size_t size, off_t offset ) {
-  if(ilist.entry.find(fh) == ilist.entry.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
+  if(ilist.openFileTable.find(fh) == ilist.openFileTable.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
 
   // get the file to be read from, this will change slightly with open file list
   File f = ilist.entry.at(fh);
   int dataSize = f.data.size();
+  cout << "dataSize" << dataSize << endl << "offset " << offset << endl;
   if(dataSize == 0) return an_err; // TODO: more descriptive error msg, e.g. file is empty, or file is a directory.
                                    // this is not necessarily an error, just return nothing or a diff error value
-  if(dataSize >= offset) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
+  if(offset > dataSize) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
 
   // TODO: make sure they have read access permissions, and update to get and check
   // file from Andrew's open file table implementation will have pertinent info
+
 
   // While buf has not run out of space and we're not at the end of the file, copy
   // data from data to buf
@@ -599,25 +601,30 @@ void my_pwrite_test_harness() {
  * in the data string
 */
 int my_pwrite( int fh, const char *buf, size_t size, off_t offset ) {
-  if(ilist.entry.find(fh) == ilist.entry.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
+  if(ilist.openFileTable.find(fh) == ilist.openFileTable.end()) return an_err; // TODO: more descriptive error msg, e.g. file not found
 
   // get the file to be read from
   File f = ilist.entry.at(fh);
   int dataSize = f.data.size();
-  if(offset >= dataSize) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
-  if(size <= 0) return an_err; // TODO: more descriptive error msg, e.g. nothing to write
+  if(offset >= dataSize && dataSize != 0) return an_err; // TODO: more descriptive error msg, e.g. invalid offset
+  if(dataSize <= 0) {
+    cout << "Initializing new file with data" << endl;
+    string s(buf);
+    ilist.entry[fh].data = s;
+    return ok;
+  }
+  if(size == 0) return an_err; // TODO: more descriptive error msg, e.g. nothing to write
 
   // TODO: make sure they have write access permissions, and update to get and check
   // file from Andrew's open file table implementation will have pertinent info
 
+
+
   // While buf has not run out of space and we're not at the end of the file, copy
   // data from buf to data
-  int iBuf = 0, iData = offset;
-  while(iBuf < size && iData < dataSize) {
-    f.data[iData] = buf[iBuf];
-    iBuf++;
-    iData++;
-  }
+
+  cout << "Inserting into existing file" << endl;
+  ilist.entry[fh].data.insert(offset,buf);
 
   // TODO: have a statement that indicates whether you reached the end of the file or not?
   return ok;
@@ -1259,7 +1266,7 @@ int main(int argc, char* argv[] ) {
 		my_mkdir("/Dir1/Dir2/Dir3/Dir4", S_IFDIR);
 		cout << "A Sample File System has been created. Directories include /, /Dir1,\n";
 		cout << "/Dir1/Dir2, /Dir1/Dir2/Dir3, and /Dir1/Dir2/Dir3/Dir4.\n";
-		cout << "A sample file has been created and is located at /Dir1/Sample_File.\n"; 
+		cout << "A sample file has been created and is located at /Dir1/Sample_File.\n";
   if ( argc ) myin.open( argv[1] );
   for(;;) { // Idiom for infinite loop
     string op, file, source, destination;
@@ -1386,6 +1393,35 @@ int main(int argc, char* argv[] ) {
       break;
     } else if (op == "lslr"  ) { // executes visit()
       visit(file);
+    } else if (op == "write") {
+        int fh = find_ino(file);
+        cout << "Pre write data: " << ilist.entry[fh].data << endl;
+        int size = 10;
+        char buf[10] = "abcdefghi";
+        cout << buf << endl;
+        int offset = 0;
+
+        if(my_pwrite(fh, buf, size, offset) == ok) cout << "Write successful" << endl;
+        else cout << "Error during write" << endl;
+        cout << "Post write data: " << ilist.entry[fh].data << endl;
+
+        size = 4;
+        char buf2[4] = "123";
+        offset = 4;
+        if(my_pwrite(fh, buf2, size, offset) == ok) cout << "Write successful" << endl;
+        else cout << "Error during write" << endl;
+        cout << "Post write data: " << ilist.entry[fh].data << endl;
+
+    } else if (op == "read") {
+        int fh = find_ino(file);
+        int size = 5;
+        char buf[5];
+        int offset = 2;
+        if(my_pread(fh, buf, size, offset) == ok) cout << "Read successful" << endl;
+        else cout << "Error during read" << endl;
+        cout << "Read content: " << buf << endl;
+
+
     } else {
       cout << "Correct usage is: op pathname,\n";
       cout << "where \"op\" is one of the following:\n";
@@ -1395,6 +1431,7 @@ int main(int argc, char* argv[] ) {
   }
 
   // Continuation of main(), which is reacable via the "break" op.
+  /*
   show_stat( ilist.entry[2].metadata );  // all looks good here.
   cdbg << "Now we call lstat on \"/\" and &mystat" << endl;
   struct stat mystat;
@@ -1420,4 +1457,5 @@ int main(int argc, char* argv[] ) {
   cout << endl;
   describe_file( "/junk" );
   cout << endl;
+  */
 }
