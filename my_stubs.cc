@@ -391,16 +391,19 @@ int my_rename( const char *path, const char *newpath ) {
 }
 
 // called at line #279 of bbfs.c
-int my_link(const char *path, const char *newpath) {
-  // Extract Hard Link Name and Target Directory
+int my_link(const char *path, const char *newpath)
+{
+	// Extract Hard Link Name and Target Directory
 	vector<string> v = split(string(newpath),"/");
   	string tail = v.back();
 	string target_dir;
 	if (v.size() < 2)
 	target_dir = ".";
 	else
-	target_dir = v.at(v.size() - 2);
-
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
 	// Find inode of the file in path
   	ino_t fh = find_ino(path);
 	if (fh == 0)
@@ -429,7 +432,8 @@ int my_link(const char *path, const char *newpath) {
 	{
 		if (target_directory.at(i).the_dirent.d_ino == fh)
 		{
-			if (target_directory.at(i).the_dirent.d_name == tail.c_str())
+			string temp = target_directory.at(i).the_dirent.d_name;
+			if (temp == tail)
 			{
 				// Hard Link exists
 				errno = EPERM;
@@ -442,7 +446,7 @@ int my_link(const char *path, const char *newpath) {
 	++ ilist.entry[fh].metadata.st_nlink;
 	dirent_frame new_link;
 	new_link.the_dirent.d_ino = fh;
-	strcpy(new_link.the_dirent.d_name, tail.c_str());
+	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
 	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
 	// Push Hard Link into Target Directory
 	ilist.entry[fh2].dentries.push_back(new_link);
@@ -545,7 +549,7 @@ int my_chmod(const char *path, mode_t mode)
 		ilist.entry[fh].metadata.st_mode |= S_IFREG;
 
 	}	// change the inode structure modification time
- 	ilist.entry[fh].metadata.st_ctime = time(0);
+ 	ilist.entry[fh].metadata.st_ctime = time(0);		
 	return ok;
 }
 
