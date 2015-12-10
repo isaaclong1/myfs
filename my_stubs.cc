@@ -299,16 +299,13 @@ int my_rmdir(const char *path)
 	vs.pop_back();
 	string parent_path = join(vs,"/");
 	parent_path = "/" + parent_path;
-	// cdbg << "Parent path is " << parent_path << endl;
 	ino_t parent = find_ino(parent_path);
-	// cdbg << "Parent ino is " << parent << endl;
 	vector<dirent_frame> & v = ilist.entry[parent].dentries;
 	for(auto it = v.begin(); it != v.end(); ++it )
 	{
 		// We erase him from his parent directory.
 		if ( it->the_dirent.d_ino == fh )
 		{
-			// cdbg << "erasing " << fh << " from " << parent << endl;
       			v.erase(it);
       			break;  // Must stop iterating now!
       		}
