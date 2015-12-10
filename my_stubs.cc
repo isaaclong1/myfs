@@ -519,22 +519,27 @@ int my_open( const char *path, int flags ) {
   // corresponding directory entry, which has type struct dirent.
   // Return its d_fileno, unless there's an error and then return -1.
 
-  if (path == NULL) return -1;
+  if (path == NULL) return an_err;
 
   ino_t fh = find_ino(path);
+  if ( fh < 0 && ( flags & O_CREAT ) ) {
+    mode_t defaultMode = S_IFREG | S_ISUID | S_ISGID | S_IRWXU | S_IRGRP | S_IROTH;
+    dev_t defaultDev = 100;
+    my_mknod( path, defaultMode, defaultDev );
+  }
+  
+  fh = find_ino(path);
   if ( fh >= 0 ) {
     if ( ilist.openFileTable.emplace(fh).second )
     {
       File* file = find_file( fh );
       file->metadata.st_atime = time(0);
+      file->metadata.st_nlink++;
       return fh;
     }
-      //file is open
-    return an_err;
-  } else if ( flags & O_CREAT ) {
-    //my_creat( path, flags ); // create a new inode with ino_t filecount++;
   }
-
+  
+  return an_err;
 }
 
 // waiting on test harness for open to be complete
@@ -632,6 +637,17 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
 int my_close( int fh ) {
   if( ilist.openFileTable.erase( fh ) )
   {
+    File* file = find_file( fh );
+    if ( file == NULL ) return an_err;
+    
+    file->metadata.st_nlink--;
+    if ( ilist.entry[fh].metadata.st_nlink < 1 )
+    {
+		  std::map<ino_t, File>::iterator it;
+		  it = ilist.entry.find(fh);
+		  if (it != ilist.entry.end())
+		  ilist.entry.erase(it);
+    }
     return ok;
   }
   return an_err;
@@ -805,6 +821,7 @@ ino_t find_ino( string path ) {
 
 
 File* find_file( ino_t ino ) { // could improve readability of code
+  if ( ilist.entry.find( ino ) == ilist.entry.end() ) return NULL;
   return & ilist.entry[ino];
 }
 
