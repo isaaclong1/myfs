@@ -521,6 +521,19 @@ int my_unlink( const char *path )
 		it = ilist.entry.find(fh);
 		if (it != ilist.entry.end())
 		ilist.entry.erase(it);
+		vector <dirent_frame> Target_Directory = ilist.entry[fh2].dentries;
+		for (int i = 0; i < Target_Directory.size(); i++)
+		{
+			string temp = Target_Directory.at(i).the_dirent.d_name;
+			if (Target_Directory.at(i).the_dirent.d_ino == fh){
+			if (temp == tail){
+			if (Target_Directory.at(i).the_dirent.d_type != 'H')
+			{
+				Target_Directory.erase(Target_Directory.begin() + i);
+				ilist.entry[fh2].dentries = Target_Directory;
+				break;
+			}}}
+		}		
 	}
 	return ok;
 }
