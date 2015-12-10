@@ -60,6 +60,7 @@ c#include <sys/xattr.h>
 #include <string>
 #include <map>
 #include <list>
+#include <set>
 #include <iostream>
 
 using namespace std;
@@ -84,7 +85,6 @@ struct dirent_frame { // The official definition of dirent puts its users
   char overflow[NAME_MAX]; // to catch overflow from one-char name field.
 };
 
-
 class File {
 public:
   //inode metadata;                     // for use by all files
@@ -102,12 +102,12 @@ class Ilist {
 public:
   int count;
   map<ino_t,File> entry;
+  set<ino_t> openFileTable;
   int next() {
     static int count = 2;  // ino counter stats at 2.
     return count++;
   }
 } ilist;
-
 
 void initialize() { // now called from main() but could be called from
                     // Ilist constructor (I think).
@@ -392,11 +392,16 @@ int my_open( const char *path, int flags ) {
 
   ino_t fh = find_ino(path);
   if ( fh >= 0 ) {
-    File* file = find_file( fh );
-    file->metadata.st_atime = time(0);
-    return fh;
+    if ( ilist.openFileTable.emplace(fh).second )
+    {
+      File* file = find_file( fh );
+      file->metadata.st_atime = time(0);
+      return fh;
+    }
+      //file is open
+    return an_err;
   } else if ( flags & O_CREAT ) {
-    my_creat( path, flags ); // create a new inode with ino_t filecount++;
+    //my_creat( path, flags ); // create a new inode with ino_t filecount++;
   }
 
 }
@@ -494,6 +499,10 @@ int my_statvfs(const char *fpath, struct statvfs *statv) {
 
 // called at line #530 of bbfs.c
 int my_close( int fh ) {
+  if( ilist.openFileTable.erase( fh ) )
+  {
+    return ok;
+  }
   return an_err;
 }
 
