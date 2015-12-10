@@ -443,7 +443,7 @@ int my_link(const char *path, const char *newpath)
 	++ ilist.entry[fh].metadata.st_nlink;
 	dirent_frame new_link;
 	new_link.the_dirent.d_ino = fh;
-	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
+	strcpy(new_link.the_dirent.d_name, tail.c_str());
 	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
 	// Push Hard Link into Target Directory
 	ilist.entry[fh2].dentries.push_back(new_link);
@@ -546,7 +546,7 @@ int my_chmod(const char *path, mode_t mode)
 		ilist.entry[fh].metadata.st_mode |= S_IFREG;
 
 	}	// change the inode structure modification time
- 	ilist.entry[fh].metadata.st_ctime = time(0);		
+ 	ilist.entry[fh].metadata.st_ctime = time(0);
 	return ok;
 }
 
@@ -579,14 +579,16 @@ int my_open( const char *path, int flags ) {
   if (path == NULL) return an_err;
 
   ino_t fh = find_ino(path);
-  if ( fh < 0 && ( flags & O_CREAT ) ) {
+
+  if ( fh <= 0 && ( flags & O_CREAT ) ) {
     mode_t defaultMode = S_IFREG | S_ISUID | S_ISGID | S_IRWXU | S_IRGRP | S_IROTH;
     dev_t defaultDev = 100;
     my_mknod( path, defaultMode, defaultDev );
   }
 
   fh = find_ino(path);
-  if ( fh >= 0 ) {
+  cout << fh << endl;
+  if ( fh > 0 ) {
     if ( ilist.openFileTable.emplace(fh).second )
     {
       File* file = find_file( fh );
@@ -637,11 +639,12 @@ int my_pread( int fh, char *buf, size_t size, off_t offset ) {
   // While buf has not run out of space and we're not at the end of the file, copy
   // data from data to buf
   int iBuf = 0, iData = offset;
-  while(iBuf < size && iData < dataSize) {
+  while(iBuf < size - 1 && iData < dataSize) {
     buf[iBuf] = f.data[iData];
     iBuf++;
     iData++;
   }
+  buf[iBuf] = '\0';
 
   // TODO: have a statement that indicates whether you reached the end of the file or not?
   return ok;
@@ -756,7 +759,8 @@ int my_access( const char *fpath, int mask ) {
 // called at line #856 of bbfs.c
 int my_creat( const char *fpath, mode_t mode ) {
   // we can create a file by using the right flags to open
-  return an_err;
+  if(my_open(fpath, O_CREAT) != an_err) return ok;
+  else return an_err;
 }
 
 // called at line #887 of bbfs.c
@@ -1509,6 +1513,11 @@ int main(int argc, char* argv[] ) {
   	    ino_t fh = find_ino(arg2);
     	show_stat(ilist.entry[fh].metadata);
     	cout << "\nThe new name is " << ilist.entry[fh].dentries[pos].the_dirent.d_name << "\n";
+    }
+    else if (op == "create") {
+      int ret = my_creat(file.c_str(), 777);
+      if(ret == ok) cout << "my_create was successful" << endl;
+      else cout << "error during my_create" << endl;
     }
     else {
       cout << "Correct usage is: op pathname,\n";
