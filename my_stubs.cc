@@ -527,7 +527,7 @@ int my_open( const char *path, int flags ) {
     dev_t defaultDev = 100;
     my_mknod( path, defaultMode, defaultDev );
   }
-  
+
   fh = find_ino(path);
   if ( fh >= 0 ) {
     if ( ilist.openFileTable.emplace(fh).second )
@@ -538,7 +538,7 @@ int my_open( const char *path, int flags ) {
       return fh;
     }
   }
-  
+
   return an_err;
 }
 
@@ -646,7 +646,7 @@ int my_close( int fh ) {
   {
     File* file = find_file( fh );
     if ( file == NULL ) return an_err;
-    
+
     file->metadata.st_nlink--;
     if ( ilist.entry[fh].metadata.st_nlink < 1 )
     {
