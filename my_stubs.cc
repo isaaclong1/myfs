@@ -335,11 +335,12 @@ bool comp(char c[], string s)
 unsigned pos; // used to keep track of the dentries position of the last changed d_name for testing purposes in main()
 // called at line #261 of bbfs.c
 int my_rename( const char *path, const char *newpath ) {
+  // Extract Hard Link Name and Target Directory
   vector<string> v = split(string(path),"/");
   string tail = v.back();
   string target_dir;
   if (v.size() < 2)
-  target_dir = ".";
+    target_dir = ".";
   else
   {
     v.pop_back();
@@ -351,15 +352,15 @@ int my_rename( const char *path, const char *newpath ) {
   if (fh == 0)
   {
         errno = EPERM;
-    cout << "rename Error: File Not Found" << endl;
+        cout << "Error rename: File Not Found" << endl;
         return an_err;
-    }
-    else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+  }
+  else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
   {
         errno = EPERM;
-    cout << "rename Error:is a directory" << endl;
+        cout << "Error rename: First argument is a directory" << endl;
         return an_err;
-    }
+  }
   // Find inode of Target Directory in path
   ino_t fh2 = find_ino(target_dir);
   if (ilist.entry[fh].metadata.st_nlink > 1)
@@ -376,7 +377,7 @@ int my_rename( const char *path, const char *newpath ) {
       {
         // Found the original file, but Hard Links to it need to be deleted first
             errno = EPERM;
-        cout << "rename Error: Cannot unlink the original file if there exists Hard Links to it" << endl;
+        cout << "Error rename: Cannot unlink the original file if there exists Hard Links to it" << endl;
             return an_err;
         }
       else
@@ -384,11 +385,11 @@ int my_rename( const char *path, const char *newpath ) {
     }
     if (position == -1)
     {
-      // Hard Link was not found
+          // Hard Link was not found
           errno = EPERM;
-      cout << "rename Error: Hard Link not found" << endl;
+          cout << "Error rename: Hard Link not found" << endl;
           return an_err;
-      }
+    }
     // At this point, a Hard Link was found at "position"
     ilist.entry[fh].metadata.st_nlink--;
     Target_Directory.erase(Target_Directory.begin() + position);
@@ -1382,8 +1383,9 @@ int main(int argc, char* argv[] ) {
   ifstream myin;
 	// Initiallizing my own files and directories. This is part of the menu.
 	my_mkdir("/Dir1", S_IFDIR);
+	my_mknod("/Dir1/AFILE", S_IFREG, 100);
 	my_mknod("/Dir1/Sample_File", S_IFREG, 100);
-  my_open("/Dir1/Sample_File", 0);
+        my_open("/Dir1/Sample_File", 0);
 	my_mkdir("/Dir1/Dir2", S_IFDIR);
 	my_mkdir("/Dir1/Dir2/Dir3", S_IFDIR);
 	my_mkdir("/Dir1/Dir2/Dir3/Dir4", S_IFDIR);
@@ -1537,30 +1539,25 @@ int main(int argc, char* argv[] ) {
         cout << "Read content: " << buf << endl;
 
     } else if(op == "rename") {// rename file or directory
-    	string arg1;
-    	string arg2;
-    	cout << "Enter arg 0, path name as /Dir1/Sample_File. For example, \"/home/cnd/mod1\"\n";
-    	cin >> arg1;
-    	cout << "Enter arg1, new path name as /Dir1/New_Name. For example, \"/home/cnd/mod2\"\n";
-    	cin >> arg2;
+      string arg1;
+      string arg2;
+      cout << "Enter arg 0, path name as /Dir1/Sample_File. For example, \"/home/cnd/mod1\"\n";
+      cin >> arg1;
+      cout << "Enter arg1, new path name as /Dir1/New_Name. For example, \"/home/cnd/mod2\"\n";
+      cin >> arg2;
 
-    	mode_t mode;
-    	//create the file using my_mknod
-    	my_mknod(arg1.c_str(), (S_IFREG), 100 );
+      cout << "\nNow calling rename(" << arg1 << ", " << arg2 << ")\n";
+      my_rename(arg1.c_str(), arg2.c_str() );
 
-    	cout << "\nNow calling rename(" << arg1 << ", " << arg2 << ")\n";
-    	my_rename(arg1.c_str(), arg2.c_str() );
-
-        int k = 0;
-  		for(unsigned i = 0; i < arg2.size(); i++)
-  		{
-  			if(arg2[i] == '/')
-  			k = i;
-  		}
-  		arg2 = arg2.substr(0, k);
-  	    ino_t fh = find_ino(arg2);
-    	show_stat(ilist.entry[fh].metadata);
-    	cout << "\nThe new name is " << ilist.entry[fh].dentries[pos].the_dirent.d_name << "\n";
+      int k = 0;
+      for(unsigned i = 0; i < arg2.size(); i++)
+      {
+        if(arg2[i] == '/')
+        k = i;
+      }
+      arg2 = arg2.substr(0, k);
+      ino_t fh = find_ino(arg2);
+      show_stat(ilist.entry[fh].metadata);
     }
     else if (op == "create") {
       int ret = my_creat(file.c_str(), 777);
