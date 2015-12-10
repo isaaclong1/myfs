@@ -1,5 +1,5 @@
 
-// Note: this code is a work-in-progress.  This version: 2:00PM PST 11/14/15
+// Note: this code is a work-in-progress.  This version: 10:50 PM 12/08/2015
 
 // I intend that the prototypes and behaviors of these functions be
 // identical to those of their glibc counterparts, with three minor
@@ -207,6 +207,8 @@ int my_mknod( const char *path, mode_t mode, dev_t dev ) {
   // Now we create and configure this File's metadata (inode/struct).
   int the_ino = ilist.next();     // Get and record this directory's ino
   struct stat& md = ilist.entry[the_ino].metadata;   // Create this file
+  // Looks like an entry in the map is already created with "the_ino"
+  // Thus giving us a new file
   mode_t old_umask = umask(0);  // sets umask to 0 and returns old value
   umask(old_umask);                       // restores umask to old value
   md.st_dev     = dev;                /* ID of device containing file */
@@ -280,11 +282,6 @@ int my_mkdir( const char *path, mode_t mode ) {
   return my_mknod(path, (S_IFDIR | mode), 100 );
 }  // my_mkdir
 
-// called at line #203 of bbfs.cg
-int my_unlink( const char *path ) {
-  return an_err;
-}
-
 // called at line #220 of bbfs.c
 int my_rmdir( const char *path ) {
   // See http://linux.die.net/man/2/rmdir for a full list of all 13
@@ -297,7 +294,7 @@ int my_rmdir( const char *path ) {
     errno = ENOTDIR;
     return an_err;
   }
-  if ( ! the_dir.dentries.size() > 2 ) {  // for . and ..
+  if ( the_dir.dentries.size() > 2 ) {
     cdbg << "not empty\n";
     errno = ENOTEMPTY;
     return an_err;
@@ -334,32 +331,166 @@ int my_rename( const char *path, const char *newpath ) {
   return an_err;
 }
 
-// called at line #279 of bbfs.c
-int my_link(const char *path, const char *newpath) {
-  vector<string> v = split(string(newpath),"/");
-  string tail = v.back();
-  string dirpath = join(v, "/");
-  ino_t fh = find_ino(path);
-  if ( ! S_ISDIR( ilist.entry[fh].metadata.st_mode ) ) {
-    errno = EPERM;
-    return an_err;
-  }
-  ino_t fh2 = find_ino(newpath);
-  if ( ! S_ISDIR( ilist.entry[fh2].metadata.st_mode ) ) {
-    errno = EPERM;
-    return an_err;
-  }
-  ++ ilist.entry[fh].metadata.st_nlink;
-  // check for overflow.
-  dirent d;
-  d.d_ino = fh;
-  strcpy( d.d_name, tail.c_str() );
-  return ok;
+int my_link(const char *path, const char *newpath)
+{
+	// Extract Hard Link Name and Target Directory
+	vector<string> v = split(string(newpath),"/");
+  	string tail = v.back();
+	string target_dir;
+	if (v.size() < 2)
+	target_dir = ".";
+	else
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
+	// Find inode of the file in path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_link: File Not Found" << endl;
+    		return an_err;
+  	}
+  	else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+	{
+    		errno = EPERM;
+		cout << "Error my_link: First argument is a directory" << endl;
+    		return an_err;
+  	}
+	// Find inode of the directory in newpath
+  	ino_t fh2 = find_ino(target_dir);
+  	if (fh2 == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_link: Target Directory Not Found" << endl;
+    		return an_err;
+  	}
+	// Check to see if Hard Link already exists within Target Directory
+	vector<dirent_frame> target_directory = ilist.entry[fh2].dentries;
+	for (int i = 0; i < target_directory.size(); i++)
+	{
+		if (target_directory.at(i).the_dirent.d_ino == fh)
+		{
+			string temp = target_directory.at(i).the_dirent.d_name;
+			if (temp == tail)
+			{
+				// Hard Link exists
+				errno = EPERM;
+				cout << "Error my_link: Hard Link already exists" << endl;
+		    		return an_err;
+			}
+		}
+	}
+	// Create a new Hard Link
+	++ ilist.entry[fh].metadata.st_nlink;
+	dirent_frame new_link;
+	new_link.the_dirent.d_ino = fh;
+	strcpy(new_link.the_dirent.d_name, tail.c_str()); 
+	new_link.the_dirent.d_type = 'H';			// 'H' marks a Hard Link dirent
+	// Push Hard Link into Target Directory
+	ilist.entry[fh2].dentries.push_back(new_link);
+	return ok;
 }
 
-// called at line #296 of bbfs.c
-int my_chmod(const char *path, mode_t mode) {
-  return an_err;
+int my_unlink( const char *path )
+{
+	// Extract Hard Link Name and Target Directory
+	vector<string> v = split(string(path),"/");
+  	string tail = v.back();
+	string target_dir;
+	if (v.size() < 2)
+	target_dir = ".";
+	else
+	{
+		v.pop_back();
+		target_dir = join(v, "/");
+	}
+
+	// Find inode of the file in path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_unlink: File Not Found" << endl;
+    		return an_err;
+  	}
+  	else if ( S_ISDIR( ilist.entry[fh].metadata.st_mode ) )
+	{
+    		errno = EPERM;
+		cout << "Error my_unlink: First argument is a directory" << endl;
+    		return an_err;
+  	}
+	// Find inode of Target Directory in path
+	ino_t fh2 = find_ino(target_dir);
+	if (ilist.entry[fh].metadata.st_nlink > 1)
+	{
+		// Check to see where the Hard Link exists in Target Directory
+		vector <dirent_frame> Target_Directory = ilist.entry[fh2].dentries;
+		int position = -1;
+		for (int i = 0; i < Target_Directory.size(); i++)
+		{
+			string temp = Target_Directory.at(i).the_dirent.d_name;
+			if (Target_Directory.at(i).the_dirent.d_ino == fh){
+			if (temp == tail){
+			if (Target_Directory.at(i).the_dirent.d_type != 'H')
+			{
+				// Found the original file, but Hard Links to it need to be deleted first
+		    		errno = EPERM;
+				cout << "Error my_unlink: Cannot unlink the original file if there exists Hard Links to it" << endl;
+		    		return an_err;
+		  	}
+			else
+			position = i;}}
+		}
+		if (position == -1)
+		{
+			// Hard Link was not found
+	    		errno = EPERM;
+			cout << "Error my_unlink: Hard Link not found" << endl;
+	    		return an_err;
+	  	}
+		// At this point, a Hard Link was found at "position"
+		ilist.entry[fh].metadata.st_nlink--;
+		Target_Directory.erase(Target_Directory.begin() + position);
+		ilist.entry[fh2].dentries = Target_Directory;
+
+	}
+	else
+	{
+		// If we unlink the original file, then we delete the file from the ilist
+		ilist.entry[fh].metadata.st_nlink--;
+		std::map<ino_t, File>::iterator it;
+		it = ilist.entry.find(fh);
+		if (it != ilist.entry.end())
+		ilist.entry.erase(it);
+	}
+	return ok;
+}
+ 
+int my_chmod(const char *path, mode_t mode)
+{
+		// Find the inode of path
+  	ino_t fh = find_ino(path);
+	if (fh == 0)
+	{
+    		errno = EPERM;
+		cout << "Error my_chmod: File Not Found" << endl;
+    		return an_err;
+  	}	// If it is a directory
+	if (S_ISDIR(ilist.entry[fh].metadata.st_mode))
+	{
+		ilist.entry[fh].metadata.st_mode = mode;
+		ilist.entry[fh].metadata.st_mode |= S_IFDIR;
+	}
+	else	// If it is a file
+	{
+		ilist.entry[fh].metadata.st_mode = mode;
+		ilist.entry[fh].metadata.st_mode |= S_IFREG;
+
+	}	// change the inode structure modification time
+ 	ilist.entry[fh].metadata.st_ctime = time(0);		
+	return ok;
 }
 
 // called at line #314 of bbfs.c
@@ -1120,9 +1251,18 @@ int main(int argc, char* argv[] ) {
   initialize();
   stringstream record;
   ifstream myin;
+		// Initiallizing my own files and directories. This is part of the menu.
+		my_mkdir("/Dir1", S_IFDIR);
+		my_mknod("/Dir1/Sample_File", S_IFREG, 100);
+		my_mkdir("/Dir1/Dir2", S_IFDIR);
+		my_mkdir("/Dir1/Dir2/Dir3", S_IFDIR);
+		my_mkdir("/Dir1/Dir2/Dir3/Dir4", S_IFDIR);
+		cout << "A Sample File System has been created. Directories include /, /Dir1,\n";
+		cout << "/Dir1/Dir2, /Dir1/Dir2/Dir3, and /Dir1/Dir2/Dir3/Dir4.\n";
+		cout << "A sample file has been created and is located at /Dir1/Sample_File.\n"; 
   if ( argc ) myin.open( argv[1] );
   for(;;) { // Idiom for infinite loop
-    string op, file;
+    string op, file, source, destination;
     // if ( myin.eof() ) exit(0);
     cout << "Which op and file? " << endl;
     (myin.good() ? myin : cin) >> op >> file;
@@ -1147,7 +1287,95 @@ int main(int argc, char* argv[] ) {
       struct stat a_stat;
       my_lstat(file.c_str(), &a_stat);
       show_stat(a_stat);
-    } else if (op == "exit"  ) { // quits
+    }				// Use S_IFREG in the st_mode field to create a regular file
+				// Use S_ISREG to check to see if it is a regular file
+	else if (op == "View")
+	{
+		cout << "Ilist size: " << ilist.entry.size() << endl;
+		cout << "Number of Files: " << ilist.entry[2].dentries.size() << endl;
+		for (int i = 0; i < ilist.entry[2].dentries.size(); i++)
+		cout << i << ": " << ilist.entry[2].dentries[i].the_dirent.d_name << endl;
+		// my_mknod( const char *path, S_IFREG, 100 ) Creates a file
+	}
+	else if (op == "Link")
+	{
+		cout << "Please indicate source followed by destination: ";
+		cin >> source >> destination;
+		cout << "Generating Results...\n";
+		int Result = my_link(source.c_str(), destination.c_str());
+		if (Result == ok)
+		{
+			vector<string> v = split(string(destination),"/");
+			v.pop_back();
+			destination = join(v, "/");
+			cout << "Hard Link creation successful! Viewing results in " << destination << ":" << endl;
+			ls(destination);
+		}
+	}
+	else if (op == "Unlink")
+	{
+		cout << "Generating Results...\n";
+		int Result = my_unlink(file.c_str());
+		if (Result == ok)
+		{
+			vector<string> v = split(string(file),"/");
+			v.pop_back();
+			file = join(v, "/");
+			cout << "Hard Link deletion successful! Viewing results in " << file << ":" << endl;
+			ls(file);
+		}
+	}
+	else if (op == "Chmod")
+	{
+		cout << "Current File Statistics:\n";
+		show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
+		cout << "Please type a permission bit mask (Examples: 777, 4000, 6777, 776, 001):\n";
+		int mod = 0;
+		mode_t mod_1 = 0;
+		cin >> mod;
+						// This section of the code represents a "smart" int to bit mask
+		if ((mod - 4000) >= 0)		// converter. If mod does not = 0 at the end, then the user
+		{mod_1 += S_ISUID; mod -= 4000;}// entered an incorrect bitmask. I later found out that this is
+		if ((mod - 2000) >= 0)		// something called "Octal"
+		{mod_1 += S_ISGID; mod -= 2000;}
+		if ((mod - 1000) >= 0)
+		{mod_1 += S_ISVTX; mod -= 1000;}
+
+		if ((mod - 400) >= 0)
+		{mod_1 += S_IRUSR; mod -= 400;}
+		if ((mod - 200) >= 0)
+		{mod_1 += S_IWUSR; mod -= 200;}
+		if ((mod - 100) >= 0)
+		{mod_1 += S_IXUSR; mod -= 100;}
+
+		if ((mod - 40) >= 0)
+		{mod_1 += S_IRGRP; mod -= 40;}
+		if ((mod - 20) >= 0)
+		{mod_1 += S_IWGRP; mod -= 20;}
+		if ((mod - 10) >= 0)
+		{mod_1 += S_IXGRP; mod -= 10;}
+
+		if ((mod - 4) >= 0)
+		{mod_1 += S_IROTH; mod -= 4;}
+		if ((mod - 2) >= 0)
+		{mod_1 += S_IWOTH; mod -= 2;}
+		if ((mod - 1) >= 0)
+		{mod_1 += S_IXOTH; mod -= 1;}
+						// At this point, mod_1 holds the desired bit mask required for "mode"
+		if (mod == 0)
+		{
+			cout << "Generating Results on " << mod_1 << "...\n";
+			int Result = my_chmod(file.c_str(), mod_1);
+			if (Result == ok)
+			{
+				cout << "Chmod was successful! Viewing specified file:\n";
+				show_stat( ilist.entry[ int(find_ino(file)) ].metadata );
+			}
+		}
+		else
+		cout << "Error my_chmod: User entered an invalid permission bit mask\n";
+	}
+      else if (op == "exit"  ) { // quits
       // save dialog so far to specified file.
       ofstream myfile;
       myfile.open (file);
@@ -1161,7 +1389,7 @@ int main(int argc, char* argv[] ) {
     } else {
       cout << "Correct usage is: op pathname,\n";
       cout << "where \"op\" is one of the following:\n";
-      cout << "help, play, save, mkdir, show, break, lslr, exit.\n";
+      cout << "help, play, save, mkdir, show, break, lslr, exit, Link, Unlink, Chmod.\n";
       cout << "For example, type \"exit now\" to exit.\n";
     }
   }
