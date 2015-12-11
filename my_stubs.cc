@@ -375,9 +375,9 @@ int my_rename( const char *path, const char *newpath ) {
       if (temp == tail){
       if (Target_Directory.at(i).the_dirent.d_type != 'H')
       {
-        // Found the original file, but Hard Links to it need to be deleted first
+        // Found the file, but Hard Links to it need to be deleted first
             errno = EPERM;
-        cout << "Error rename: Cannot unlink the original file if there exists Hard Links to it" << endl;
+        cout << "Error rename: Cannot unlink the file if there exists Hard Links to it" << endl;
             return an_err;
         }
       else
@@ -397,7 +397,7 @@ int my_rename( const char *path, const char *newpath ) {
   }
   else
   {
-    // If we unlink the original file, then we delete the file from the ilist
+    // If we unlink the file, then we delete the file from the ilist
     ilist.entry[fh].metadata.st_nlink--;
     std::map<ino_t, File>::iterator it;
     it = ilist.entry.find(fh);
@@ -528,9 +528,9 @@ int my_unlink( const char *path )
 			if (temp == tail){
 			if (Target_Directory.at(i).the_dirent.d_type != 'H')
 			{
-				// Found the original file, but Hard Links to it need to be deleted first
+				// Found the file, but Hard Links to it need to be deleted first
 		    		errno = EPERM;
-				cout << "Error my_unlink: Cannot unlink the original file if there exists Hard Links to it" << endl;
+				cout << "Error my_unlink: Cannot unlink the file if there exists Hard Links to it" << endl;
 		    		return an_err;
 		  	}
 			else
@@ -551,7 +551,7 @@ int my_unlink( const char *path )
 	}
 	else
 	{
-		// If we unlink the original file, then we delete the file from the ilist
+		// If we unlink the file, then we delete the file from the ilist
 		ilist.entry[fh].metadata.st_nlink--;
 		std::map<ino_t, File>::iterator it;
 		it = ilist.entry.find(fh);
